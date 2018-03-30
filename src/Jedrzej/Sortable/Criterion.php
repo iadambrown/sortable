@@ -55,7 +55,12 @@ class Criterion
 
         if(method_exists($builder->getModel(), $sortMethod)) {
             call_user_func_array([$builder->getModel(), $sortMethod], [$builder, $this->getOrder()]);
-        } else {
+        } else if(strstr($this->getField(),'.')) {
+            $relation_keys = explode(".",$this->getField());
+            $builder->join($relation_keys[1].' as po', 'po.'.$relation_keys[2], '=', $relation_keys[0].'.id')
+                ->orderBy('po.'.$relation_keys[3], $this->getOrder())
+                ->select($relation_keys[0].'.*');       // just to avoid fetching anything from joined table
+        }else {
             $builder->orderBy($this->getField(), $this->getOrder());
         }
     }
