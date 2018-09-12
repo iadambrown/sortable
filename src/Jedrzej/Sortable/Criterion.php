@@ -63,14 +63,16 @@ class Criterion
                 if(!collect($builder->getQuery()->joins)->pluck('table')->contains($relation_keys[1])) {
                     $builder->leftJoin($relation_keys[1], $relation_keys[0].'.'.$relation_keys[2], '=', $relation_keys[1].'.id');
                 }
+                $builder->orderBy($relation_keys[1].'.'.$relation_keys[3], $this->getOrder())
+                    ->select($relation_keys[0].'.*');       // just to avoid fetching anything from joined table
             } else {
                 // use foreign key in joined table
-                if(!collect($builder->getQuery()->joins)->pluck('table')->contains($relation_keys[1])) {
-                    $builder->leftJoin($relation_keys[1], $relation_keys[1].'.'.$relation_keys[2], '=', $relation_keys[0].'.id');
+                if (! collect($builder->getQuery()->joins)->pluck('table')->contains($relation_keys[1])) {
+                    $builder->leftJoin($relation_keys[1], $relation_keys[1] . '.' . $relation_keys[2], '=', $relation_keys[0] . '.id');
                 }
+                $builder->orderBy($relation_keys[1] . '.' . $relation_keys[3], $this->getOrder())
+                    ->select($relation_keys[0] . '.*');       // just to avoid fetching anything from joined table
             }
-            $builder->orderBy($relation_keys[1].'.'.$relation_keys[3], $this->getOrder())
-                ->select($relation_keys[0].'.*');       // just to avoid fetching anything from joined table
         }else {
             $builder->orderBy($this->getField(), $this->getOrder());
         }
