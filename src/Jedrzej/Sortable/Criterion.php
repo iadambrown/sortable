@@ -57,8 +57,17 @@ class Criterion
             call_user_func_array([$builder->getModel(), $sortMethod], [$builder, $this->getOrder()]);
         } else if(strstr($this->getField(),'.')) {
             $relation_keys = explode(".",$this->getField());
-            if(!collect($builder->getQuery()->joins)->pluck('table')->contains($relation_keys[1])) {
-                $builder->leftJoin($relation_keys[1], $relation_keys[1].'.'.$relation_keys[2], '=', $relation_keys[0].'.id');
+            // main table[0] . join table[1] . foreign key[2] . sort column[3] . ?flip[4]?
+            if(isset($relation_keys[4]) && $relation_keys[4]=='flip') {
+                // use foreign key in primary table
+                if(!collect($builder->getQuery()->joins)->pluck('table')->contains($relation_keys[1])) {
+                    $builder->leftJoin($relation_keys[1], $relation_keys[0].'.'.$relation_keys[2], '=', $relation_keys[1].'.id');
+                }
+            } else {
+                // use foreign key in joined table
+                if(!collect($builder->getQuery()->joins)->pluck('table')->contains($relation_keys[1])) {
+                    $builder->leftJoin($relation_keys[1], $relation_keys[1].'.'.$relation_keys[2], '=', $relation_keys[0].'.id');
+                }
             }
             $builder->orderBy($relation_keys[1].'.'.$relation_keys[3], $this->getOrder())
                 ->select($relation_keys[0].'.*');       // just to avoid fetching anything from joined table
