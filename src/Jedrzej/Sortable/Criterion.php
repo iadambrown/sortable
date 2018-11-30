@@ -1,12 +1,14 @@
 <?php namespace Jedrzej\Sortable;
 
-use Illuminate\Database\Eloquent\Builder;
+use function call_user_func, in_array;
+
 use InvalidArgumentException;
+use Illuminate\Database\Eloquent\Builder;
 
 class Criterion
 {
-    const ORDER_ASCENDING = 'asc';
-    const ORDER_DESCENDING = 'desc';
+    public const ORDER_ASCENDING = 'asc';
+    public const ORDER_DESCENDING = 'desc';
 
     protected $field;
 
@@ -15,7 +17,7 @@ class Criterion
     /**
      * @return string
      */
-    public function getField()
+    public function getField(): string
     {
         return $this->field;
     }
@@ -23,7 +25,7 @@ class Criterion
     /**
      * @return string
      */
-    public function getOrder()
+    public function getOrder(): string
     {
         return $this->order;
     }
@@ -36,10 +38,10 @@ class Criterion
      *
      * @return Criterion
      */
-    public static function make($value, $defaultOrder = self::ORDER_ASCENDING)
+    public static function make($value, $defaultOrder = self::ORDER_ASCENDING): Criterion
     {
         $value = static::prepareValue($value);
-        list($field, $order) = static::parseFieldAndOrder($value, $defaultOrder);
+        [$field, $order] = static::parseFieldAndOrder($value, $defaultOrder);
 
         return new static($field, $order);
     }
@@ -49,22 +51,33 @@ class Criterion
      *
      * @param Builder $builder query builder
      */
-    public function apply(Builder $builder)
+    public function apply(Builder $builder): void
     {
         $sortMethod = 'sort' . studly_case($this->getField());
 
-        if(method_exists($builder->getModel(), $sortMethod)) {
-            call_user_func_array([$builder->getModel(), $sortMethod], [$builder, $this->getOrder()]);
-        } else if(strstr($this->getField(),'.')) {
-            $relation_keys = explode(".",$this->getField());
-            // main table[0] . join table[1] . foreign key[2] . sort column[3] . ?flip[4]?
-            if(isset($relation_keys[4]) && $relation_keys[4]=='flip') {
-                // use foreign key in primary table
-                if(!collect($builder->getQuery()->joins)->pluck('table')->contains($relation_keys[1])) {
-                    $builder->leftJoin($relation_keys[1], $relation_keys[0].'.'.$relation_keys[2], '=', $relation_keys[1].'.id');
+        if (method_exists($builder->getModel(), $sortMethod)) {
+            call_user_func([$builder->getModel(), $sortMethod], $builder, $this->getOrder());
+        } else if (false !== strpos($this->getField(), '.')) {
+            $relation_keys = explode('.', $this->getField());
+            if (isset($relation_keys[4]) && $relation_keys[4] === 'flip') {
+                // main table[0] . join_table[1] . foreign_key[2] . sort_column[3] . (literal word) flip[4]
+                if (! collect($builder->getQuery()->joins)->pluck('table')->contains($relation_keys[1])) {
+                    // use foreign key in primary table
+                    $builder->leftJoin($relation_keys[1], $relation_keys[0] . '.' . $relation_keys[2], '=', $relation_keys[1] . '.id');
                 }
-                $builder->orderBy($relation_keys[1].'.'.$relation_keys[3], $this->getOrder())
-                    ->select($relation_keys[0].'.*');       // just to avoid fetching anything from joined table
+                $builder->orderBy($relation_keys[1] . '.' . $relation_keys[3], $this->getOrder())
+                    ->select($relation_keys[0] . '.*');       // just to avoid fetching anything from joined table
+            } elseif (isset($relation_keys[4]) && $relation_keys[4]==='pivot') {
+                // main_table [0] . join_table [1] . foreign_key [2] . sort_column [3] . (literal word) pivot [4] . pivot_table [5] . local_key [6]
+                $pivotTable = $relation_keys[5];
+                $localKey = $relation_keys[6];
+
+                if (! collect($builder->getQuery()->joins)->pluck('table')->contains($relation_keys[1])) {
+                    $builder->leftJoin($pivotTable, $pivotTable . '.' . $localKey, '=', $relation_keys[0] . '.id');
+                    $builder->leftJoin($relation_keys[1], $pivotTable . '.' . $relation_keys[2], '=', $relation_keys[1] . '.id');
+                }
+                $builder->orderBy($relation_keys[1] . '.' . $relation_keys[3], $this->getOrder())
+                    ->select($relation_keys[0] . '.*');
             } else {
                 // use foreign key in joined table
                 if (! collect($builder->getQuery()->joins)->pluck('table')->contains($relation_keys[1])) {
@@ -73,7 +86,7 @@ class Criterion
                 $builder->orderBy($relation_keys[1] . '.' . $relation_keys[3], $this->getOrder())
                     ->select($relation_keys[0] . '.*');       // just to avoid fetching anything from joined table
             }
-        }else {
+        } else {
             $builder->orderBy($this->getField(), $this->getOrder());
         }
     }
@@ -84,7 +97,7 @@ class Criterion
      */
     protected function __construct($field, $order)
     {
-        if (!in_array($order, [static::ORDER_ASCENDING, static::ORDER_DESCENDING])) {
+        if (! in_array($order, [static::ORDER_ASCENDING, static::ORDER_DESCENDING], true)) {
             throw new InvalidArgumentException('Invalid order value');
         }
 
@@ -99,7 +112,7 @@ class Criterion
      *
      * @return string
      */
-    protected static function prepareValue($value)
+    protected static function prepareValue($value): string
     {
         return trim($value, " \t\n\r\0\x0B");
     }
@@ -114,11 +127,10 @@ class Criterion
      *
      * @throws InvalidArgumentException when unable to parse field name or order
      */
-    protected static function parseFieldAndOrder($value, $defaultOrder)
+    protected static function parseFieldAndOrder($value, $defaultOrder): array
     {
         if (preg_match('/^([^,]+)(,(asc|desc))?$/', $value, $match)) {
-            return [$match[1], isset($match[3]) ? $match[3] : $defaultOrder];
-
+            return [$match[1], $match[3] ?? $defaultOrder];
         }
 
         throw new InvalidArgumentException(sprintf('Unable to parse field name or order from "%s"', $value));
