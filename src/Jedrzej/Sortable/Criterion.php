@@ -89,6 +89,28 @@ class Criterion
                     }
                     $builder->orderBy($relation_keys[3] . '.' . $relation_keys[5], $this->getOrder())
                         ->select($relation_keys[0] . '.*');       // just to avoid fetching anything from joined table
+                } elseif (isset($relation_keys[9]) && $relation_keys[9] === 'flip') {
+                    if (isset($relation_keys[4]) && $relation_keys[4] === 'pivot') {
+                        // M2M Sort, with Pivot:  main_table[0].join_table[1].foreign_key[2].sort_by_field[3].pivot[4].pivot_table[5].local_key[6]
+                        $pivotTable = $relation_keys[5];
+                        $localKey = $relation_keys[6];
+
+                        if (! collect($builder->getQuery()->joins)->pluck('table')->contains($relation_keys[1])) {
+                            $builder->leftJoin($pivotTable, $pivotTable . '.' . $localKey, '=', $relation_keys[0] . '.id');
+                            $builder->leftJoin($relation_keys[1], $pivotTable . '.' . $relation_keys[2], '=', $relation_keys[1] . '.id');
+                        }
+                    }
+
+                    $fk = $relation_keys[3];
+                    $joinTable = $relation_keys[7];
+                    $sortColumn = $relation_keys[8];
+
+                    if (! collect($builder->getQuery()->joins)->pluck('table')->contains($joinTable)) {
+                        $builder->leftJoin($joinTable, $joinTable . '.id', '=', $relation_keys[1] . '.' . $fk);
+                    }
+
+                    $builder->orderBy($relation_keys[7] . '.' . $relation_keys[8], $this->getOrder())
+                        ->select($relation_keys[0] . '.*');
                 }
             } elseif (isset($relation_keys[4]) && $relation_keys[4] === 'pivot') {
 
